@@ -1,0 +1,6 @@
+# Copy this file to terraform.tfvars and fill in your own values.
+# terraform.tfvars is gitignored — never commit real account-specific values.
+
+aws_region            = "eu-central-1"
+data_lake_bucket_name = "soc-in-a-box-CHANGEME-dev"   # must be globally unique across all of AWS
+glue_database_name    = "soc_in_a_box"

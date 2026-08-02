@@ -1,0 +1,44 @@
+# Traffic Generator CronJob
+# Runs every 30 minutes to generate realistic baseline CloudTrail activity.
+# Requires the aws-credentials secret (created via setup.sh below).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: traffic-generator
+  namespace: soc-simulators
+spec:
+  schedule: "*/30 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: traffic-generator
+              image: python:3.12-slim
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  pip install boto3 --quiet && \
+                  python /app/simulate_traffic.py
+              volumeMounts:
+                - name: script
+                  mountPath: /app
+              env:
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: aws-credentials
+                      key: access_key_id
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: aws-credentials
+                      key: secret_access_key
+                - name: AWS_DEFAULT_REGION
+                  value: eu-central-1
+          volumes:
+            - name: script
+              configMap:
+                name: traffic-generator-script

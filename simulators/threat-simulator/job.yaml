@@ -1,0 +1,46 @@
+# Threat Simulator Job
+# Run manually before a demo — not scheduled.
+# Usage: kubectl apply -f job.yaml -n soc-simulators
+# To run a specific scenario:
+#   kubectl set env job/threat-simulator SCENARIO=mass-iam
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: threat-simulator
+  namespace: soc-simulators
+spec:
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: threat-simulator
+          image: python:3.12-slim
+          command:
+            - /bin/sh
+            - -c
+            - |
+              pip install boto3 --quiet && \
+              python /app/simulate_threats.py --scenario ${SCENARIO:-all}
+          volumeMounts:
+            - name: script
+              mountPath: /app
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: access_key_id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: secret_access_key
+            - name: AWS_DEFAULT_REGION
+              value: eu-central-1
+            - name: SCENARIO
+              value: "all"
+      volumes:
+        - name: script
+          configMap:
+            name: threat-simulator-script

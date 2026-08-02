@@ -1,0 +1,76 @@
+{
+  "Comment": "SOC-in-a-Box Incident Response Playbook (Express). Notify → Route → Document.",
+  "StartAt": "Notify",
+  "States": {
+
+    "Notify": {
+      "Type": "Task",
+      "Comment": "Send SNS alert immediately. Responders get notified within seconds of detection.",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "SNS_TOPIC_ARN_PLACEHOLDER",
+        "Subject.$": "States.Format('[SOC-in-a-Box] {} — {}', $.severity, $.detection_type)",
+        "Message.$": "$.summary"
+      },
+      "ResultPath": "$.notify_result",
+      "Next": "RouteByDetectionType",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "RouteByDetectionType",
+          "ResultPath": "$.notify_error"
+        }
+      ]
+    },
+
+    "RouteByDetectionType": {
+      "Type": "Choice",
+      "Comment": "Route HIGH severity findings to containment Lambda. MEDIUM goes straight to logging.",
+      "Choices": [
+        {
+          "Variable": "$.severity",
+          "StringEquals": "HIGH",
+          "Next": "ContainAndDocument"
+        }
+      ],
+      "Default": "LogFinding"
+    },
+
+    "ContainAndDocument": {
+      "Type": "Task",
+      "Comment": "Invoke the contain-identity Lambda which: queries Athena for recent activity, attaches a Deny policy to the offending identity, and writes the incident record to S3.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "soc-in-a-box-contain-identity",
+        "Payload.$": "$"
+      },
+      "ResultPath": "$.containment_result",
+      "Next": "IncidentComplete",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "LogFinding",
+          "ResultPath": "$.containment_error"
+        }
+      ]
+    },
+
+    "LogFinding": {
+      "Type": "Pass",
+      "Comment": "MEDIUM severity or containment failed — log the finding for manual review. The SNS notification already went out above.",
+      "Parameters": {
+        "status": "logged_for_review",
+        "detection_type.$": "$.detection_type",
+        "severity.$": "$.severity",
+        "summary.$": "$.summary"
+      },
+      "Next": "IncidentComplete"
+    },
+
+    "IncidentComplete": {
+      "Type": "Succeed",
+      "Comment": "Playbook complete. Check SNS for the alert and CloudWatch Logs for Lambda execution details."
+    }
+
+  }
+}
